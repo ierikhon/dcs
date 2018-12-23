@@ -52,7 +52,7 @@ class Tank
     {
         $('#log').append("Calculating next mission");
         let current_max = 0;
-        let current_dest;
+        let current_dest = 0;
         for (let i = 0; i < map.length; i++)
         {
             if (map.bases[i].enemies/map.dijkstra[this.position][i] > current_max)
@@ -62,10 +62,14 @@ class Tank
             }
         }
         $('#log').append("Mission assigned. Calculating path");
-        while (this.path[this.path.length-1] !== current_dest)
+
+        this.path[0] = current_dest;
+        while (this.path[0] !== this.position)
         {
-            this.path.push(map.bases[this.path[this.path.length-1]].from);
+            this.path.unshift();
+            this.path[0] = map.bases[this.path[1]].from;
         }
+        this.path.shift();
         this.onMission = true;
         $('#log').append("Path calculated");
     }
@@ -137,13 +141,17 @@ class Karta {
     }
 
     dijkstrify() {
-        for (let i = 0; i < this.initial.length; i++) {
-            for (let j = 0; j < this.initial.length; j++) {
+        for (let j = 0; j < this.dijkstra.length; j++) {
+            for (let i = 0;  i< this.dijkstra.length; i++) {
                 if (i !== j) {
-                    for (let k = 0; k < this.initial.length; k++) {
-                        if (this.initial[i][k].dist > this.initial[i][j].dist + this.initial[j][k].dist) {
-                            this.initial[i][k].dist = this.initial[i][j].dist + this.initial[j][k].dist;
-                            this.bases[k].from = j;
+                    for (let k = 0; k < this.dijkstra.length; k++) {
+                        if (j !== k) {
+                            if (this.dijkstra[i][k] * this.dijkstra[i][j] * this.dijkstra[j][k] > 0) {
+                                if (this.dijkstra[i][k] > this.dijkstra[i][j] + this.dijkstra[j][k]) {
+                                    this.dijkstra[i][k] = this.dijkstra[i][j] + this.dijkstra[j][k];
+                                    this.bases[k].from = j;
+                                }
+                            }
                         }
                     }
                 }
@@ -182,7 +190,6 @@ async function init(socket)
         socket.json.emit('get_map');
         socket.json.emit('get_enemy');
         await sleep(500);
-        console.log(enemies);
         let map = new Karta(maps, enemies);
         map.createDijkstra();
         let tank = new Tank();
