@@ -33,6 +33,8 @@ class Base
         this.x = base.x;
         this.y = base.y;
         this.enemies = 0;
+        this.from = 0;
+        this.attended = false;
     }
 }
 
@@ -53,11 +55,12 @@ class Tank
         $('#log').append("Calculating next mission");
         let current_max = 0;
         let current_dest = 0;
-        for (let i = 0; i < map.length; i++)
+        map.scan();
+        for (let i = 0; i < map.bases.length; i++)
         {
-            if (map.bases[i].enemies/map.dijkstra[this.position][i] > current_max)
+            if ((map.bases[i].enemies/map.dijkstra[i] > current_max) && (i != this.position))
             {
-                current_max = map.bases[i].enemies / map.dijkstra[this.position][i];
+                current_max = map.bases[i].enemies / map.dijkstra[i];
                 current_dest = i;
             }
         }
@@ -66,8 +69,7 @@ class Tank
         this.path[0] = current_dest;
         while (this.path[0] !== this.position)
         {
-            this.path.unshift();
-            this.path[0] = map.bases[this.path[1]].from;
+            this.path.unshift(map.bases[this.path[0]].from);
         }
         this.path.shift();
         this.onMission = true;
@@ -77,7 +79,8 @@ class Tank
     moveForward()
     {
         this.position = this.path[0];
-        this.path.unshift();
+        this.path.shift();
+        sleep(2500);
     }
 }
 
@@ -115,13 +118,14 @@ class Karta {
         this.dijkstrify = this.dijkstrify.bind(this);
         this.sectorClear = this.sectorClear.bind(this);
         this.createDijkstra = this.createDijkstra.bind(this);
+        this.scan = this.scan.bind(this);
+        this.hasUnattended = this.hasUnattended.bind(this);
 
         this.spawnEnemies(enemies);
         this.spawnBases(data.base);
         this.initial = data.initial;
         this.dijkstra = [];
-        for (let i=0; i<this.initial.length; i++)
-            this.dijkstra[i] = [];
+        this.createDijkstra();
     }
 
     spawnEnemies(data)
@@ -129,6 +133,18 @@ class Karta {
         for (let i = 0; i < data.length; i++)
         {
             this.enemies[i] = new Enemy(data[i]);
+        }
+    }
+
+    scan()
+    {
+        for (let i = 0; i < this.bases.length; i++)
+        {
+            this.bases[i].enemies = 0;
+        }
+        for (let j = 0; j < this.enemies.length; j++)
+        {
+            this.bases[this.enemies[j].belongs].enemies += 1;
         }
     }
 
@@ -140,21 +156,29 @@ class Karta {
         }
     }
 
-    dijkstrify() {
-        for (let j = 0; j < this.dijkstra.length; j++) {
-            for (let i = 0;  i< this.dijkstra.length; i++) {
-                if (i !== j) {
-                    for (let k = 0; k < this.dijkstra.length; k++) {
-                        if (j !== k) {
-                            if (this.dijkstra[i][k] * this.dijkstra[i][j] * this.dijkstra[j][k] > 0) {
-                                if (this.dijkstra[i][k] > this.dijkstra[i][j] + this.dijkstra[j][k]) {
-                                    this.dijkstra[i][k] = this.dijkstra[i][j] + this.dijkstra[j][k];
-                                    this.bases[k].from = j;
-                                }
-                            }
-                        }
+    hasUnattended()
+    {
+        for (let i = 0; i < this.bases.length; i++) {
+            if (!this.bases[i].attended) return true;
+        }
+        return false;
+    }
+
+    dijkstrify(gde_tank)
+    {
+        this.dijkstra[gde_tank] = 0;
+        while (this.hasUnattended())
+        {
+            for (let i = 0; i < this.bases.length; i++) {
+                for (let j = 0; j < this.bases.length; j++) {
+                    if (this.dijkstra[i] > this.dijkstra[j] + this.initial[i][j])
+                    {
+                        this.dijkstra[i] = this.dijkstra[j] + this.initial[i][j];
+                        this.bases[i].from = j;
+                        this.bases[j].attended = false;
                     }
                 }
+                this.bases[i].attended = true;
             }
         }
     }
@@ -174,12 +198,15 @@ class Karta {
 
     createDijkstra()
     {
-        for (let i = 0; i < this.initial.length; i++)
-        {
-            for (let j = 0; j < this.initial.length; j++)
-            {
-                this.dijkstra[i][j] = this.initial[i][j]*distance(this.bases[i], this.bases[j])
+        for (let i = 0; i < this.initial.length; i++) {
+            for (let j = 0; j < this.initial.length; j++) {
+                this.initial[i][j] = this.initial[i][j]*distance(this.bases[i], this.bases[j]);
+                if (this.initial[i][j] == 0)
+                    this.initial[i][j] = 999999;
             }
+        }
+        for (let i = 0; i < this.bases.length; i++) {
+            this.dijkstra[i] = 999999;
         }
     }
 }
@@ -191,7 +218,6 @@ async function init(socket)
         socket.json.emit('get_enemy');
         await sleep(500);
         let map = new Karta(maps, enemies);
-        map.createDijkstra();
         let tank = new Tank();
         task(map, tank, socket);
     }
@@ -203,15 +229,16 @@ async function init(socket)
 }
 
 async function task(map, tank, socket) {
-    map.dijkstrify();
+    map.dijkstrify(tank.position);
     tank.assignPath(map);
-    while (tank.path.length !== 1)
+    while (tank.path.length !== 0)
     {
         tank.moveForward();
-        console.log("Moved to base " + tank.path[0]);
+        console.log("Moved to base " + tank.position);
         /*тут танк едет*/
     }
     map.sectorClear(tank.position);
+    await sleep(1000);
     socket.json.emit('get_enemy');
     for (let i = 0; i < map.enemies.length; i++)
     {
@@ -222,7 +249,7 @@ async function task(map, tank, socket) {
 }
 
 function distance(enemy, base) {
-    return Math.sqrt(((enemy.x - base.x)^2) + ((enemy.y - base.y)^2))
+    return Math.sqrt(Math.pow((enemy.x - base.x), 2) + Math.pow((enemy.y - base.y), 2)).toFixed(3);
 }
 
 function sleep(ms) {

@@ -18,31 +18,26 @@ function startSocketServer() {
         });
 
         socket.on('get_enemy', () => {
-            console.log('enemy_get');
             get_enemy(socket);
         });
 
         socket.on('get_map', () => {
-            console.log('map_get');
             get_map(socket);
         });
 
         socket.on('set_enemy', (msg) => {
-            console.log('enemy_set');
             enemy = msg;
             set_enemy(socket);
         });
 
         socket.on('set_enemy_2', (msg) => {
-            console.log('enemy_set');
             enemy = msg;
+            console.log(enemy);
             set_enemy(socket);
             socket.broadcast.json.emit('update_enemy');
-
         });
 
         socket.on('set_map', (msg) => {
-            console.log('map_set');
             map = msg;
             set_map(socket);
         });
@@ -90,7 +85,7 @@ function set_enemy(socket){
 
 function set_map(socket){
     if (gps_connected && enemy_connected){
-        socket.broadcast.json.emit('enemy_data', enemy);
+        socket.broadcast.json.emit('map_data', map);
     }
     else {
         setTimeout(function () {

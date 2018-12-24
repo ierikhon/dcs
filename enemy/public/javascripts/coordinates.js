@@ -28,8 +28,9 @@ $(document).ready(()=>{
 });
 
 
-function doitsjob() {
+async function doitsjob() {
     socket.json.emit('get_map');
+    await sleep(500);
     enemy_spawn();
     for(let i = 0; i < enemy.length; i++) {
         let min = 9999;
@@ -40,18 +41,18 @@ function doitsjob() {
             }
         }
     }
-
+    console.log(enemy);
     $('#log').empty().append(map).append(enemy);
     socket.json.emit('set_enemy', enemy);
 }
 
 function enemy_spawn() {
     while (all_enemy < 10) {
-        if (enemy[all_enemy].alive !== true) {
+        if (enemy[all_enemy].isAlive === false) {
             enemy[all_enemy] = {
                 x: Math.random()*1000,
                 y: Math.random()*1000,
-                alive: 1
+                isAlive: 1
             };
         }
         all_enemy++;
@@ -61,4 +62,7 @@ function distance(enemy, base) {
     return distance_value = Math.sqrt( ((enemy.x - base.x)^2) +  ((enemy.y - base.y)^2))
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
